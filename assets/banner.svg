@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320" role="img" aria-label="jellyseerr-matrix-bot">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="0.55" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#d946ef"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="#0d1017"/>
+  <rect width="1279" height="319" x="0.5" y="0.5" rx="23.5" fill="none" stroke="#252b38"/>
+  <circle cx="210" cy="160" r="190" fill="url(#glow)"/>
+  <!-- Matrix-style brackets -->
+  <path d="M120 92 h-30 v136 h30" stroke="#8a93a5" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M300 92 h30 v136 h-30" stroke="#8a93a5" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- gradient tile with play glyph -->
+  <rect x="140" y="90" width="140" height="140" rx="32" fill="url(#tile)"/>
+  <path d="M193 128 L245 160 L193 192 Z" fill="#ffffff"/>
+  <!-- wordmark -->
+  <text x="392" y="168" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="58" font-weight="600" letter-spacing="-1" fill="#e6e9ef">jellyseerr-matrix-bot</text>
+  <text x="394" y="218" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="27" fill="#8a93a5">Jellyseerr notifications in an end-to-end encrypted Matrix room</text>
+</svg>

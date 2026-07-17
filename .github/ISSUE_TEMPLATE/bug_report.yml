@@ -1,0 +1,35 @@
+name: Bug report
+description: Something doesn't work
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: compose
+    attributes:
+      label: compose.yml
+      description: Your compose service definition (redact nothing secret, there shouldn't be secrets in it).
+      render: yaml
+  - type: input
+    id: lang
+    attributes:
+      label: BOT_LANG
+      placeholder: en
+  - type: textarea
+    id: logs
+    attributes:
+      label: Bot logs
+      description: "`docker logs jellyseerr-matrix-bot` around the time of the problem. Redact tokens if any appear."
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: template
+    attributes:
+      label: Webhook JSON payload template
+      description: The template configured in Jellyseerr, if you changed it from the one in docs/setup.md.
+      render: json

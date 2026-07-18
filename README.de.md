@@ -17,15 +17,16 @@ Ich habe das gebaut, weil Jellyseerr zwar Discord-, Telegram-, Slack- und
 Pushover-Agents mitbringt, aber kein Matrix. Funktioniert mit Seerr, Jellyseerr
 und Overseerr, das Webhook-Payload ist identisch.
 
-So sieht eine Benachrichtigung aus:
+So sieht eine Benachrichtigung in Element aus (gestellter Inhalt, gerendert aus
+dem echten Bot-Output — neu erzeugen mit `assets/mock/gen.py`):
 
-> 🎬 **Jetzt verfügbar**
-> [**Der Herr der Ringe: Die Gefährten (2001)**](#) (Film)
-> Status: Verfügbar
-> Angefragt von @frodo
+<p align="center">
+  <img src="assets/screenshot-de.png" alt="Benachrichtigung in Element: Poster, fette Headline, verlinkter Titel, Status-Zeile, Beschreibung, Mention-Pille" width="400">
+</p>
 
-mit dem Filmposter über dem Text, dem Titel als Link in dein Jellyseerr, und
-`@frodo` ist eine echte Matrix-Mention, die pusht, auch wenn der Raum stumm ist.
+Poster und Text-Karte sind eine Nachricht, der Titel verlinkt in dein
+Jellyseerr, und `frodo` ist eine echte Matrix-Mention-Pille, die pusht, auch
+wenn der Raum stumm ist.
 
 ## Features
 

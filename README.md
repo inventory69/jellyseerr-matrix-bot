@@ -17,17 +17,15 @@ I built this because Jellyseerr ships Discord, Telegram, Slack and Pushover
 agents, but no Matrix. Works with Seerr, Jellyseerr and Overseerr, they all send
 the same webhook payload.
 
-<!-- TODO: hero screenshot (staged test room, fake cast), see assets/ -->
+What a notification looks like in Element (staged content, rendered from the
+bot's real output — regenerate via `assets/mock/gen.py`):
 
-What a notification looks like:
+<p align="center">
+  <img src="assets/screenshot-en.png" alt="Notification in Element: poster, bold headline, linked title, status line, overview, mention pill" width="400">
+</p>
 
-> 🎬 **Now available**
-> [**The Lord of the Rings: The Fellowship of the Ring (2001)**](#) (Movie)
-> Status: Available
-> Requested by @frodo
-
-with the movie poster above the text, the title linking to your Jellyseerr, and
-`@frodo` being an actual Matrix mention that pings, even if the room is muted.
+Poster and text card are one message, the title links to your Jellyseerr, and
+`frodo` is an actual Matrix mention pill that pings, even if the room is muted.
 
 ## Features
 

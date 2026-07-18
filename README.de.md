@@ -17,9 +17,6 @@ Ich habe das gebaut, weil Jellyseerr zwar Discord-, Telegram-, Slack- und
 Pushover-Agents mitbringt, aber kein Matrix. Funktioniert mit Seerr, Jellyseerr
 und Overseerr, das Webhook-Payload ist identisch.
 
-So sieht eine Benachrichtigung in Element aus (gestellter Inhalt, gerendert aus
-dem echten Bot-Output — neu erzeugen mit `assets/mock/gen.py`):
-
 <p align="center">
   <img src="assets/screenshot-de.png" alt="Benachrichtigung in Element: Poster, fette Headline, verlinkter Titel, Status-Zeile, Beschreibung, Mention-Pille" width="400">
 </p>
@@ -27,15 +24,6 @@ dem echten Bot-Output — neu erzeugen mit `assets/mock/gen.py`):
 Poster und Text-Karte sind eine Nachricht, der Titel verlinkt in dein
 Jellyseerr, und `frodo` ist eine echte Matrix-Mention-Pille, die pusht, auch
 wenn der Raum stumm ist.
-
-## Features
-
-- Funktioniert in E2EE-Räumen, Pushes kommen auch bei "nur Erwähnungen" an
-- Poster und Text-Karte in einer Nachricht (m.image mit Caption, MSC2530)
-- `USER_MAP` macht aus Jellyseerr-Usernamen Matrix-Mention-Pillen
-- Team-Pings bei neuen Anfragen und Problemen, nichts bleibt unbemerkt liegen
-- Titel und Issues verlinken zurück in dein Jellyseerr, inklusive Antworten-Link
-- Prometheus-Metriken auf `/metrics`, Ausgabe auf Englisch oder Deutsch (`BOT_LANG`)
 
 ## Schnellstart
 
@@ -61,30 +49,18 @@ volumes:
    ```
 
 2. Die sechs Pflicht-Variablen in `config.env` ausfüllen (Homeserver, Bot-User,
-   Token, Device-ID, Raum, Webhook-Secret). Der Rest ist optional und als
-   solcher markiert. In [docs/setup.md](docs/setup.md) stehen der
-   Token-Einzeiler und das Webhook-Template für Jellyseerr.
+   Token, Device-ID, Raum, Webhook-Secret). In [docs/setup.md](docs/setup.md)
+   stehen der Token-Einzeiler und das Webhook-Template für Jellyseerr.
 
 3. `docker compose up -d`, dann in Jellyseerrs Webhook-Einstellungen auf "Test"
    klicken. Für deutsche Nachrichten `BOT_LANG=de` setzen.
 
-## Warum nicht matrix-hookshot?
+## Alles Weitere
 
-hookshot nimmt auch generische Webhooks an, aber das JS-Transformations-Snippet
-schreibst du selbst, und Poster, Mention-Pillen und Push-trotz-Mute gibt es
-trotzdem nicht. Dieser Bot macht eine Sache: Jellyseerr nach Matrix, richtig.
-
-## Doku
-
-Die Doku unter [docs/](docs/) ist englisch: [Setup](docs/setup.md),
+Features, Vergleich mit matrix-hookshot, Doku ([Setup](docs/setup.md),
 [Konfiguration](docs/configuration.md),
-[Troubleshooting](docs/troubleshooting.md), [Monitoring](docs/monitoring.md).
-
-English version: [README.md](README.md)
-
-## Mitmachen
-
-Issues und PRs gern, auf Englisch. Vor dem Pushen `python bot.py --selfcheck`
-laufen lassen, Commits im Conventional-Stil (`feat: ...`, `fix: ...`).
+[Troubleshooting](docs/troubleshooting.md), [Monitoring](docs/monitoring.md))
+und Contributing-Hinweise stehen in der englischen [README.md](README.md), die
+immer die maßgebliche Version ist.
 
 MIT-Lizenz.

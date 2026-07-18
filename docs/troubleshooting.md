@@ -25,6 +25,12 @@ feature here, and it needs a trick: in an encrypted room the server can't read
 bot therefore attaches `m.mentions` (the Matrix IDs only, nothing else) to the
 cleartext of the encrypted event. Message content stays encrypted.
 
+This matters for every client that gets notifications via server push, which is
+all mobile apps (Element X and friends, whether FCM, APNs or UnifiedPush):
+without the cleartext copy the server sends no push at all for a muted room, so
+the app never even wakes up to decrypt. Clients that sync and decrypt while
+running, like Element Web or Desktop, spot the mention themselves either way.
+
 If mentions don't push at all, check in this order:
 
 1. Is the user in `USER_MAP` (for affected-user pings) or `ADMIN_IDS` (for team
@@ -33,6 +39,21 @@ If mentions don't push at all, check in this order:
    and new issues; user pings fire on approved/declined/available and issue
    updates. Nobody is pinged for their own comment.
 3. Client-side notification settings for keywords/mentions.
+
+## Bot doesn't join the room
+
+The bot only joins the one room configured in `MATRIX_ROOM_ID`. Invites to any
+other room are ignored without a log line, so a mismatch looks like the bot
+doing nothing. Check in this order:
+
+1. Does `MATRIX_ROOM_ID` exactly match the room you invited the bot to? Copy
+   the internal ID from the room settings again (v12+ rooms: no `:domain`
+   suffix).
+2. Is the bot actually running and syncing? `docker logs jellyseerr-matrix-bot`
+   should show activity. The bot also tries to join at startup, so an invite
+   sent while it was down is picked up on the next start.
+3. Federation: if bot and room live on different homeservers, the invite has to
+   federate first. Test with a personal account on the bot's homeserver.
 
 ## Webhook returns 401
 

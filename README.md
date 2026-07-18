@@ -18,7 +18,7 @@ agents, but no Matrix. Works with Seerr, Jellyseerr and Overseerr, they all send
 the same webhook payload.
 
 What a notification looks like in Element (staged content, rendered from the
-bot's real output — regenerate via `assets/mock/gen.py`):
+bot's real output, regenerate via `assets/mock/gen.py`):
 
 <p align="center">
   <img src="assets/screenshot-en.png" alt="Notification in Element: poster, bold headline, linked title, status line, overview, mention pill" width="400">

@@ -213,7 +213,7 @@ def render(
     if parts:
         meta = " · ".join(parts)
         lines.append(meta)
-        html_lines.append(html.escape(meta))
+        html_lines.append(f'<font color="#9e9e9e">{html.escape(meta)}</font>')
 
     if issue.get("issue_type"):
         t = issue["issue_type"]
@@ -225,12 +225,14 @@ def render(
         if season:
             detail += f" · {S['season']} {season}" + (f", {S['episode']} {episode}" if episode else "")
         lines.append(detail)
-        html_lines.append(html.escape(detail))
+        html_lines.append(f'<font color="#9e9e9e">{html.escape(detail)}</font>')
 
     body_text = comment.get("comment_message") or message
     if body_text:
         lines.append(body_text)
-        html_lines.append(html.escape(body_text))
+        # Blank line + italics set the free text apart from the header block.
+        html_lines.append("")
+        html_lines.append(f"<em>{html.escape(body_text)}</em>")
 
     def name_html(username: str) -> str:
         """Matrix link when mapped - plain text otherwise (plus a log warning)."""
@@ -240,15 +242,18 @@ def render(
             return html.escape(username)
         return f'<a href="https://matrix.to/#/{html.escape(mxid)}">{html.escape(username)}</a>'
 
+    # Footer group (people + links), separated from the card by a blank line.
+    footer = []
+
     author = comment.get("commentedBy_username")
     if author:
         lines.append(f"{S['comment_by']}: {author}")
-        html_lines.append(f"{S['comment_by']} {name_html(author)}")
+        footer.append(f"{S['comment_by']} {name_html(author)}")
 
     if target:
         label = S["reported_by"] if issue else S["requested_by"]
         lines.append(f"{label}: {target}")
-        html_lines.append(f"{label} {name_html(target)}")
+        footer.append(f"{label} {name_html(target)}")
         mxid = user_map.get(target)
         if mxid and ntype in PING_EVENTS:
             mentions.append(mxid)
@@ -257,7 +262,7 @@ def render(
     if jellyseerr_url and issue.get("issue_id"):
         href = f"{jellyseerr_url.rstrip('/')}/issues/{issue['issue_id']}"
         lines.append(f"{S['reply']}: {href}")
-        html_lines.append(f'💬 <a href="{html.escape(href)}">{S["reply"]}</a>')
+        footer.append(f'💬 <a href="{html.escape(href)}">{S["reply"]}</a>')
 
     # Ping the other side: when the reporter comments on their own issue, the
     # team should see it.
@@ -269,13 +274,17 @@ def render(
         # m.mentions alone only triggers highlight/push and is invisible - the
         # matrix.to links make the pings visible as pills in the text.
         lines.append("cc: " + " ".join(admin_ids))
-        html_lines.append(
+        footer.append(
             "cc: "
             + " ".join(
                 f'<a href="https://matrix.to/#/{html.escape(i)}">{html.escape(i)}</a>'
                 for i in admin_ids
             )
         )
+
+    if footer:
+        html_lines.append("")
+        html_lines.extend(footer)
 
     # Keep order, drop duplicate pings (a user can also be on the team), and
     # nobody pings themselves (the commenter gets no ping for their own comment).

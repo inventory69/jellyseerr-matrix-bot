@@ -90,6 +90,7 @@ STRINGS = {
         "requested_by": "Requested by",
         "reported_by": "Reported by",
         "reply": "Reply",
+        "reopen": "Reopen",
     },
     "de": {
         "events": {
@@ -123,6 +124,7 @@ STRINGS = {
         "requested_by": "Angefragt von",
         "reported_by": "Gemeldet von",
         "reply": "Antworten",
+        "reopen": "Wieder öffnen",
     },
 }
 
@@ -137,10 +139,10 @@ def set_lang(code: str):
     S = STRINGS[code]
 
 
-# Events where the affected user themselves gets pinged.
+# Events where the affected user themselves gets pinged. MEDIA_AUTO_APPROVED is
+# deliberately absent: MEDIA_AVAILABLE follows shortly after and pings anyway.
 PING_EVENTS = {
     "MEDIA_APPROVED",
-    "MEDIA_AUTO_APPROVED",
     "MEDIA_DECLINED",
     "MEDIA_AVAILABLE",
     "ISSUE_COMMENT",
@@ -152,6 +154,12 @@ PING_EVENTS = {
 # miss a new request / new issue. ISSUE_REOPENED carries no actor in the
 # payload -> ping both sides.
 ADMIN_PING_EVENTS = {"MEDIA_PENDING", "ISSUE_CREATED", "ISSUE_REOPENED"}
+
+# Issue follow-ups: no poster (the card for ISSUE_CREATED already showed it) and
+# candidates for the close/reopen-with-comment merge (Jellyseerr fires two
+# webhooks for that single action).
+ISSUE_FOLLOWUPS = {"ISSUE_COMMENT", "ISSUE_RESOLVED", "ISSUE_REOPENED"}
+MERGE_WINDOW = 5  # seconds to wait for the second webhook of a close-with-comment
 
 POSTER_MAX_BYTES = 10 * 1024 * 1024  # sanity limit; Jellyseerr posters are ~200 KB
 
@@ -258,17 +266,18 @@ def render(
         if mxid and ntype in PING_EVENTS:
             mentions.append(mxid)
 
-    # Direct link to reply on the issue page (team and reporter alike).
+    # Direct link to the issue page (team and reporter alike). On a resolved
+    # issue "reply" is the wrong invitation - the page's actual affordance is
+    # the reopen button, so label the same link accordingly.
     if jellyseerr_url and issue.get("issue_id"):
         href = f"{jellyseerr_url.rstrip('/')}/issues/{issue['issue_id']}"
-        lines.append(f"{S['reply']}: {href}")
-        footer.append(f'💬 <a href="{html.escape(href)}">{S["reply"]}</a>')
+        icon, label = ("🔁", S["reopen"]) if ntype == "ISSUE_RESOLVED" else ("💬", S["reply"])
+        lines.append(f"{label}: {href}")
+        footer.append(f'{icon} <a href="{html.escape(href)}">{label}</a>')
 
-    # Ping the other side: when the reporter comments on their own issue, the
-    # team should see it.
-    admin_ping = ntype in ADMIN_PING_EVENTS or (
-        ntype == "ISSUE_COMMENT" and author and author == target
-    )
+    # Ping the other side: when the reporter comments on (or closes) their own
+    # issue, the team should see it.
+    admin_ping = ntype in ADMIN_PING_EVENTS or (author and author == target)
     if admin_ping and admin_ids:
         mentions.extend(admin_ids)
         # m.mentions alone only triggers highlight/push and is invisible - the
@@ -456,6 +465,17 @@ async def main():
     await client.join(room_id)
 
     lock = asyncio.Lock()
+    pending: dict = {}  # issue_id -> (payload, flush task) buffered for the merge window
+
+    async def deliver(payload: dict):
+        out = render(payload, user_map, admin_ids, jellyseerr_url)
+        ntype = payload["notification_type"]
+        # Poster only on first sight of a media item; issue follow-ups stay compact.
+        poster_url = (payload.get("image") or None) if ntype not in ISSUE_FOLLOWUPS else None
+        log.info("Sending %s (image=%s)", ntype, poster_url)
+        async with lock:  # ponytail: one room, one sender - a global lock is enough
+            await send(client, room_id, *out, poster_url=poster_url)
+        NOTIFICATIONS.labels(ntype).inc()
 
     async def webhook(req: web.Request) -> web.Response:
         if not hmac.compare_digest(req.headers.get("Authorization", ""), secret):
@@ -468,17 +488,41 @@ async def main():
             WEBHOOKS.labels("dropped").inc()
             return web.Response(status=400, text="bad json")
 
-        out = render(payload, user_map, admin_ids, jellyseerr_url)
-        if out is None:
-            log.info("Dropping type %r", payload.get("notification_type"))
+        ntype = payload.get("notification_type") or ""
+        if ntype not in EMOJI:
+            log.info("Dropping type %r", ntype)
             WEBHOOKS.labels("dropped").inc()
             return web.Response(text="ignored")
-        poster_url = payload.get("image") or None
-        log.info("Sending %s (image=%s)", payload.get("notification_type"), poster_url)
-        async with lock:  # ponytail: one room, one sender - a global lock is enough
-            await send(client, room_id, *out, poster_url=poster_url)
         WEBHOOKS.labels("ok").inc()
-        NOTIFICATIONS.labels(payload["notification_type"]).inc()
+
+        # Close/reopen with comment arrives as TWO webhooks (status + comment) in
+        # either order. Buffer issue follow-ups briefly and merge the pair into
+        # one message: status payload as the card, comment attached.
+        issue_id = (payload.get("issue") or {}).get("issue_id")
+        if ntype in ISSUE_FOLLOWUPS and issue_id:
+            buffered = pending.pop(issue_id, None)
+            if buffered:
+                other, task = buffered
+                task.cancel()
+                if (ntype == "ISSUE_COMMENT") != (other["notification_type"] == "ISSUE_COMMENT"):
+                    status_p, comment_p = (other, payload) if ntype == "ISSUE_COMMENT" else (payload, other)
+                    merged = dict(status_p)
+                    merged["comment"] = comment_p.get("comment") or {}
+                    log.info("Merging %s + %s for issue %s", ntype, other["notification_type"], issue_id)
+                    await deliver(merged)
+                    return web.Response(text="ok")
+                await deliver(other)  # same kind twice: flush the old one, buffer the new
+
+            async def flush():
+                await asyncio.sleep(MERGE_WINDOW)
+                p, _ = pending.pop(issue_id, (None, None))
+                if p:  # ponytail: tiny race vs. a webhook landing mid-flush -> worst case two messages
+                    await deliver(p)
+
+            pending[issue_id] = (payload, asyncio.create_task(flush()))
+            return web.Response(text="buffered")
+
+        await deliver(payload)
         return web.Response(text="ok")
 
     async def metrics(_req: web.Request) -> web.Response:
@@ -585,6 +629,15 @@ def selfcheck():
     assert "Video · Open · Season 1, Episode 3" in body, body
     assert "Reply: https://jf.example/issues/7" in body, body
     assert '<a href="https://jf.example/issues/7">Reply</a>' in fmt, fmt
+
+    # Resolved: same link, but labeled as reopen (the page's real affordance).
+    body, fmt, _ = render(
+        {"notification_type": "ISSUE_RESOLVED", "subject": "X",
+         "issue": {"issue_id": "7", "reportedBy_username": "frodo"}},
+        umap, jellyseerr_url="https://jf.example/",
+    )
+    assert "Reopen: https://jf.example/issues/7" in body and "Reply" not in body, body
+    assert '🔁 <a href="https://jf.example/issues/7">Reopen</a>' in fmt, fmt
     # No link without issue_id / without URL; season only, no episode.
     body, fmt, _ = render(
         {"notification_type": "ISSUE_RESOLVED", "subject": "X",
@@ -607,6 +660,27 @@ def selfcheck():
     assert m == team and "cc:" in body, (m, body)
     # ...and with no team configured nobody pings (the reporter not even themselves).
     _, _, m = render(self_comment, umap)
+    assert m == [], m
+
+    # Merged close-with-comment (status payload + attached comment): resolved
+    # headline, comment text and author present, self-close still pings the team.
+    merged = {
+        "notification_type": "ISSUE_RESOLVED",
+        "subject": "The Big Lebowski",
+        "issue": {"issue_id": "7", "issue_type": "VIDEO", "issue_status": "RESOLVED",
+                  "reportedBy_username": "frodo"},
+        "comment": {"comment_message": "fixed it myself", "commentedBy_username": "frodo"},
+    }
+    body, _, m = render(merged, umap, team)
+    assert "Issue resolved" in body and "fixed it myself" in body, body
+    assert "Comment by: frodo" in body, body
+    assert m == team, m  # frodo closed his own issue -> team pinged, frodo not
+
+    # Auto-approved stays visible but pings nobody (MEDIA_AVAILABLE follows anyway).
+    _, _, m = render(
+        {"notification_type": "MEDIA_AUTO_APPROVED", "subject": "X",
+         "request": {"requestedBy_username": "frodo"}}, umap,
+    )
     assert m == [], m
 
     # ISSUE_REOPENED: both sides pinged, no double ping.

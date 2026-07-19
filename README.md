@@ -34,6 +34,8 @@ Poster and text card are one message, the title links to your Jellyseerr, and
 - `USER_MAP` turns Jellyseerr usernames into Matrix mention pills
 - Team pings on new requests and new issues, so nothing sits unapproved
 - Titles and issues link back to your Jellyseerr, including a reply link
+  (labeled "Reopen" once an issue is resolved)
+- Closing or reopening an issue with a comment becomes one message, not two
 - Prometheus metrics on `/metrics`, English and German output (`BOT_LANG`)
 
 ## Quick start

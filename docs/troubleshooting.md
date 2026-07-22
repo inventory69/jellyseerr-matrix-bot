@@ -66,6 +66,16 @@ Check `docker logs jellyseerr-matrix-bot`. A line like `Dropping type
 'MEDIA_FAILED'` means the event type is intentionally unhandled. `No USER_MAP
 entry ...` is harmless (message still sent, just no ping).
 
+## Same message posted multiple times
+
+Jellyseerr's periodic "Recently Added" scan can process the episodes of a
+newly available season in parallel, firing several `MEDIA_AVAILABLE` webhooks
+for the same item within milliseconds of each other. The bot drops repeats of
+the same (type, item) that arrive within `DEDUP_TTL` (60s) of the first —
+visible in the logs as `Duplicate ... — dropping` and in
+`bot_webhooks_total{status="duplicate"}`. Issue events are never deduplicated;
+they have their own merge logic for close/reopen-with-comment.
+
 ## Reverse proxy notes
 
 The container listens on port 8080 and speaks plain HTTP. Put your reverse proxy

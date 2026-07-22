@@ -161,6 +161,20 @@ ADMIN_PING_EVENTS = {"MEDIA_PENDING", "ISSUE_CREATED", "ISSUE_REOPENED"}
 ISSUE_FOLLOWUPS = {"ISSUE_COMMENT", "ISSUE_RESOLVED", "ISSUE_REOPENED"}
 MERGE_WINDOW = 5  # seconds to wait for the second webhook of a close-with-comment
 
+# Jellyseerr fires the same MEDIA_* notification multiple times in ONE
+# availability/recently-added scan (observed: 4x MEDIA_AVAILABLE in ~10ms for
+# one season, triggered by episodes processed in parallel). We drop repeats
+# of the same (type, item) within a short window.
+# ponytail: 60s kills the burst; real re-availability comes hours/days later.
+# If it ever becomes one repeat per 5-min scan cycle, raise DEDUP_TTL.
+# Issue events are deliberately NOT included: those repeat legitimately and
+# have their own merge logic (ISSUE_FOLLOWUPS / pending).
+DEDUP_EVENTS = {
+    "MEDIA_PENDING", "MEDIA_APPROVED", "MEDIA_AUTO_APPROVED",
+    "MEDIA_DECLINED", "MEDIA_AVAILABLE",
+}
+DEDUP_TTL = 60  # seconds
+
 POSTER_MAX_BYTES = 10 * 1024 * 1024  # sanity limit; Jellyseerr posters are ~200 KB
 
 
@@ -409,13 +423,32 @@ async def send(
         log.error("Matrix send failed: %s", resp)
 
 
+def dedup_seen(recent: dict, ntype: str, payload: dict, now: float, ttl: int = DEDUP_TTL) -> bool:
+    """True if (ntype, item) was already seen within `ttl` - a Jellyseerr burst
+    duplicate to drop. Otherwise records it and returns False. Synchronous,
+    no await: two concurrent webhook handlers can't race between check and record."""
+    if ntype not in DEDUP_EVENTS:
+        return False
+    media = payload.get("media") or {}
+    ident = str(media.get("tmdbId") or "") or (payload.get("subject") or "")
+    key = (ntype, ident)
+    # Sweep expired entries -> dict stays bounded to one TTL window.
+    for k, exp in list(recent.items()):
+        if exp <= now:
+            del recent[k]
+    if key in recent:
+        return True
+    recent[key] = now + ttl
+    return False
+
+
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger().addHandler(ErrorCounter(level=logging.ERROR))
     set_lang(os.environ.get("BOT_LANG") or "en")
     # Create label values up front, otherwise the series are missing until the
     # first event and increase()/rate() see nothing.
-    for status in ("ok", "unauthorized", "dropped"):
+    for status in ("ok", "unauthorized", "dropped", "duplicate"):
         WEBHOOKS.labels(status)
     for ntype in EMOJI:
         NOTIFICATIONS.labels(ntype)
@@ -466,6 +499,7 @@ async def main():
 
     lock = asyncio.Lock()
     pending: dict = {}  # issue_id -> (payload, flush task) buffered for the merge window
+    recent: dict = {}  # (ntype, item) -> expiry; burst dedup, see dedup_seen
 
     async def deliver(payload: dict):
         out = render(payload, user_map, admin_ids, jellyseerr_url)
@@ -494,6 +528,12 @@ async def main():
             WEBHOOKS.labels("dropped").inc()
             return web.Response(text="ignored")
         WEBHOOKS.labels("ok").inc()
+
+        if dedup_seen(recent, ntype, payload, time.monotonic()):
+            log.info("Duplicate %s for %r within %ds — dropping",
+                      ntype, payload.get("subject"), DEDUP_TTL)
+            WEBHOOKS.labels("duplicate").inc()
+            return web.Response(text="duplicate")
 
         # Close/reopen with comment arrives as TWO webhooks (status + comment) in
         # either order. Buffer issue follow-ups briefly and merge the pair into
@@ -789,6 +829,27 @@ def selfcheck():
     # Both languages cover exactly the same event types.
     assert STRINGS["en"]["events"].keys() == STRINGS["de"]["events"].keys() == EMOJI.keys()
     assert STRINGS["en"].keys() == STRINGS["de"].keys()
+
+    # Burst dedup: same (type, item) within the window is dropped after the
+    # first time; a different item, type, or later time goes through.
+    recent = {}
+    p = {"notification_type": "MEDIA_AVAILABLE", "subject": "LOL (2025)",
+         "media": {"tmdbId": "42"}}
+    assert dedup_seen(recent, "MEDIA_AVAILABLE", p, 1000.0) is False   # first: through
+    assert dedup_seen(recent, "MEDIA_AVAILABLE", p, 1000.0) is True    # burst duplicate: dropped
+    assert dedup_seen(recent, "MEDIA_AVAILABLE", p, 1000.0) is True    # ...and again
+    p2 = {"notification_type": "MEDIA_AVAILABLE", "subject": "X", "media": {"tmdbId": "43"}}
+    assert dedup_seen(recent, "MEDIA_AVAILABLE", p2, 1000.0) is False  # different item: through
+    # same item after the window expires -> through again (real re-availability)
+    assert dedup_seen(recent, "MEDIA_AVAILABLE", p, 1000.0 + DEDUP_TTL + 1) is False
+    # Issue events are NEVER deduped, even when identical.
+    ip = {"notification_type": "ISSUE_COMMENT", "subject": "Y"}
+    assert dedup_seen(recent, "ISSUE_COMMENT", ip, 2000.0) is False
+    assert dedup_seen(recent, "ISSUE_COMMENT", ip, 2000.0) is False
+    # Fallback to subject when there's no tmdbId.
+    np = {"notification_type": "MEDIA_APPROVED", "subject": "NoTmdb"}
+    assert dedup_seen(recent, "MEDIA_APPROVED", np, 3000.0) is False
+    assert dedup_seen(recent, "MEDIA_APPROVED", np, 3000.0) is True
 
     print("selfcheck ok")
 
